@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Log Out | Housing Price Predictions{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}?v={% now 'U' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dynamic-background">
+    <div class="container">
+        <div class="login-card logout-card">
+            <div class="login-header">
+                <h1>Sign Out</h1>
+                <div class="login-subtitle">Are you sure you want to sign out?</div>
+            </div>
+            
+            <form method="post" action="{% url 'account_logout' %}" class="login-form">
+                {% csrf_token %}
+                
+                {% if redirect_field_value %}
+                <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+                {% endif %}
+                
+                <div class="button-group">
+                    <button type="submit" class="btn primary-btn">
+                        Yes, Sign Out <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                    <a href="{% url 'home' %}" class="btn secondary-btn">
+                        Cancel <i class="fas fa-times"></i>
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

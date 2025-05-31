@@ -1,0 +1,66 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Housing Price Predictor{% endblock %}</title>
+    
+    <!-- CSS Principal -->
+    <link rel="stylesheet" href="{% static 'css/base.css' %}?v={% now 'U' %}">
+    
+    <!-- Fuentes e iconos -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Plotly para gráficos -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body>
+    <!-- Navegación principal -->
+    <nav class="main-nav">
+        <div class="nav-container">
+            <div class="logo">
+                <a href="{% url 'home' %}">
+                    <i class="fas fa-home"></i>
+                    Housing Predictor
+                </a>
+            </div>
+            
+            {% if user.is_authenticated %}
+            <ul class="nav-links">
+                <li><a href="{% url 'home' %}">Predictions</a></li>
+                <li><a href="{% url 'models:plot_map' %}">Maps</a></li>
+                <li><a href="{% url 'models:options' %}">Options</a></li>
+                <li><p>Welcome, {{ user.username }}!</p></li>
+                <li><a href="{% url 'account_logout' %}">Logout</a></li>
+            </ul>
+            {% else %}
+            <ul class="nav-links">
+                <li><a href="{% url 'account_login' %}">Login</a></li>
+                <li><a href="{% url 'account_signup' %}">Sign Up</a></li>
+            </ul>
+            {% endif %}
+        </div>
+    </nav>
+
+    <!-- Contenido principal -->
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Pie de página -->
+    <footer class="main-footer">
+        <div class="footer-container">
+            <p>&copy; 2025 Housing Price Predictor. Machine Learning for Real Estate Analysis.</p>
+        </div>
+    </footer>
+
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>

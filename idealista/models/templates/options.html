@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Administration Options{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/options.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="dynamic-background">
+    <div class="container">
+        <!-- Header unificado con breadcrumb -->
+        <div class="header-top">
+            <div class="breadcrumb">
+                <span class="breadcrumb-item"><i class="fas fa-home"></i> Dashboard</span>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Administration</span>
+            </div>
+            <h1><i class="fas fa-cogs"></i> Administration Options</h1>
+            <p class="subtitle">Database and model management tools for optimal system performance</p>
+        </div>
+
+        <!-- Container de notificaciones -->
+        <div id="notification-container"></div>
+
+        <div class="options-container">
+            <div class="cards-grid">
+                <!-- Tarjeta de reentrenamiento de modelos -->
+                <div class="option-card">
+                    <h2 class="option-title">
+                        <i class="fas fa-brain"></i> 
+                        Retrain Models
+                    </h2>
+                    <p class="option-description">
+                        Retrain all machine learning models with the latest market data. This process optimizes your price predictions with current economic indicators and housing trends.
+                    </p>
+                    <div class="btn-container">
+                        <button id="retrain-btn" class="btn-admin">
+                            <i class="fas fa-sync-alt"></i> Start Retraining
+                        </button>
+                    </div>
+                    <div id="retrain-processing" class="processing">
+                        <i class="fas fa-spinner"></i> Processing models... This may take several minutes.
+                    </div>
+                </div>
+
+                <!-- Tarjeta de gestión de base de datos -->
+                <div class="option-card">
+                    <h2 class="option-title">
+                        <i class="fas fa-database"></i> 
+                        Repopulate Database
+                    </h2>
+                    <p class="option-description">
+                        Clear and repopulate the database with fresh data from source files. This action will reset all existing records and import the latest housing market information.
+                    </p>
+                    <div class="btn-container">
+                        <button id="repopulate-btn" class="btn-admin btn-danger">
+                            <i class="fas fa-exclamation-triangle"></i> Repopulate Database
+                        </button>
+                    </div>
+                    <div id="repopulate-processing" class="processing">
+                        <i class="fas fa-spinner"></i> Processing database... This may take several minutes.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Procesar parámetros de URL para notificaciones
+        const urlParams = new URLSearchParams(window.location.search);
+        const status = urlParams.get('status');
+        const message = urlParams.get('message');
+        
+        if (status && message) {
+            showNotification(message, status);
+            // Limpiar parámetros de la URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+        
+        // Botón para reentrenar modelos
+        const retrainBtn = document.getElementById('retrain-btn');
+        const retrainProcessing = document.getElementById('retrain-processing');
+        
+        if (retrainBtn) {
+            retrainBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to retrain all models? This process may take several minutes and will update all prediction algorithms.')) {
+                    retrainBtn.disabled = true;
+                    retrainProcessing.style.display = 'block';
+                    
+                    fetch('{% url "models:retrain" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCSRFToken(),
+                            'Content-Type': 'application/json'
+                        },
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Server responded with status: ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        retrainBtn.disabled = false;
+                        retrainProcessing.style.display = 'none';
+                        showNotification(data.message, data.status);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        retrainBtn.disabled = false;
+                        retrainProcessing.style.display = 'none';
+                        showNotification('An error occurred during model retraining: ' + error.message, 'error');
+                    });
+                }
+            });
+        }
+        
+        // Botón para repoblar la base de datos
+        const repopulateBtn = document.getElementById('repopulate-btn');
+        const repopulateProcessing = document.getElementById('repopulate-processing');
+        
+        if (repopulateBtn) {
+            repopulateBtn.addEventListener('click', function() {
+                if (confirm('WARNING: This will permanently delete all existing data and repopulate the database with fresh information. This action cannot be undone. Are you sure you want to continue?')) {
+                    repopulateBtn.disabled = true;
+                    repopulateProcessing.style.display = 'block';
+                    
+                    fetch('{% url "models:populate" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCSRFToken(),
+                            'Content-Type': 'application/json'
+                        },
+                    })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('Server responded with status: ' + response.status);
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        repopulateBtn.disabled = false;
+                        repopulateProcessing.style.display = 'none';
+                        showNotification(data.message, data.status);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        repopulateBtn.disabled = false;
+                        repopulateProcessing.style.display = 'none';
+                        showNotification('An error occurred while repopulating the database: ' + error.message, 'error');
+                    });
+                }
+            });
+        }
+        
+        // Función para mostrar notificaciones
+        function showNotification(message, type = 'info') {
+            const container = document.getElementById('notification-container');
+            const notification = document.createElement('div');
+            
+            // Mapeo de tipos de mensaje de Django a nuestros tipos de notificación
+            const typeMap = {
+                'success': 'success',
+                'error': 'error',
+                'danger': 'error',
+                'warning': 'warning',
+                'info': 'info'
+            };
+            
+            // Elegir el icono correcto para el tipo de notificación
+            const iconMap = {
+                'success': 'fa-check-circle',
+                'error': 'fa-exclamation-circle',
+                'warning': 'fa-exclamation-triangle',
+                'info': 'fa-info-circle'
+            };
+            
+            const notificationType = typeMap[type] || 'info';
+            const iconClass = iconMap[notificationType];
+            
+            // Crear elemento de notificación
+            notification.className = `notification ${notificationType}`;
+            notification.innerHTML = `
+                <i class="fas ${iconClass} icon"></i>
+                <div class="notification-content">
+                    <div class="notification-title">${notificationType.charAt(0).toUpperCase() + notificationType.slice(1)}</div>
+                    <div class="notification-message">${message}</div>
+                </div>
+                <div class="notification-close" onclick="this.parentElement.remove()">
+                    <i class="fas fa-times"></i>
+                </div>
+            `;
+            
+            // Añadir al contenedor
+            container.appendChild(notification);
+            
+            // Auto-eliminar después de 5 segundos
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.remove();
+                }
+            }, 5000);
+        }
+                
+        // Función para obtener el token CSRF
+        function getCSRFToken() {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrftoken='))
+                ?.split('=')[1];
+            return cookieValue || '';
+        }
+    });
+</script>
+{% endblock %}

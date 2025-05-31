@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Housing Price Maps{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/predictions.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="{% static 'css/map.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="dynamic-background">
+    <div class="container">
+        <!-- Header integrado con navegación breadcrumb -->
+        <div class="header-top">
+            <div class="breadcrumb">
+                <span class="breadcrumb-item"><i class="fas fa-home"></i> Dashboard</span>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Maps</span>
+            </div>
+            <h1><i class="fas fa-map-marked-alt"></i> Housing Price Maps</h1>
+            <p class="subtitle">Interactive geographic visualization of real vs predicted housing prices across states</p>
+        </div>
+
+        <!-- Panel de control principal -->
+        <div class="map-dashboard">
+            <!-- Barra de parámetros compacta -->
+            <div class="parameters-bar">
+                <form id="map-form" method="GET" class="parameters-form">
+                    <div class="parameters-grid">
+                        <div class="parameter-group">
+                            <label for="year-select"><i class="fas fa-calendar-alt"></i> Year</label>
+                            <select id="year-select" name="year" class="parameter-select">
+                                {% for year_option in year_range %}
+                                <option value="{{ year_option }}" {% if year_option == year %}selected{% endif %}>{{ year_option }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="parameter-group">
+                            <label for="bedrooms-select"><i class="fas fa-home"></i> Property Type</label>
+                            <select id="bedrooms-select" name="bedrooms" class="parameter-select">
+                                {% for option in bedroom_options %}
+                                <option value="{{ option.value }}" {% if option.value|stringformat:"s" == bedrooms|stringformat:"s" %}selected{% endif %}>{{ option.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="parameter-group">
+                            <button type="submit" class="predict-button">
+                                <i class="fas fa-sync-alt"></i>
+                                <span>Update Maps</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Dashboard de resultados -->
+            <div class="results-dashboard">
+                <!-- Métricas destacadas -->
+                <div class="metrics-overview">
+                    <div class="overview-card primary">
+                        <div class="card-icon">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ statistics.avg_percentage_diff|floatformat:2 }}%</div>
+                            <div class="card-label">Average Difference</div>
+                            <div class="card-detail">Real vs Predicted</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card success">
+                        <div class="card-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">${{ statistics.mae|floatformat:0 }}</div>
+                            <div class="card-label">Mean Absolute Error</div>
+                            <div class="card-detail">Average deviation</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card info">
+                        <div class="card-icon">
+                            <i class="fas fa-bullseye"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">${{ statistics.rmse|floatformat:0 }}</div>
+                            <div class="card-label">Root Mean Square Error</div>
+                            <div class="card-detail">Prediction accuracy</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card warning">
+                        <div class="card-icon">
+                            <i class="fas fa-calculator"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ statistics.mse|floatformat:2 }}</div>
+                            <div class="card-label">Mean Square Error</div>
+                            <div class="card-detail">Variance measure</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel principal de visualización de mapas -->
+                <div class="visualization-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <h2 id="map-title">
+                                <i class="fas fa-map"></i>
+                                <span id="map-title-text">Real Housing Prices Map</span>
+                            </h2>
+                            <p class="chart-subtitle">{{ year }} | {{ bedrooms }} Bedrooms</p>
+                        </div>
+                        
+                        <div class="panel-controls">
+                            <div class="view-switcher">
+                                <label class="switch-label">
+                                    <input type="radio" name="map-view" value="real" checked>
+                                    <span>Real Prices</span>
+                                </label>
+                                <label class="switch-label">
+                                    <input type="radio" name="map-view" value="predicted">
+                                    <span>Predicted Prices</span>
+                                </label>
+                            </div>
+                            
+                            <div class="panel-actions">
+                                <button class="action-btn" onclick="downloadMap()" title="Download Map">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="action-btn" onclick="fullscreenMap()" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="map-container">
+                        <div id="real-map" class="map-view active">
+                            {{ real_map_html|safe }}
+                        </div>
+                        <div id="predicted-map" class="map-view">
+                            {{ predicted_map_html|safe }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Análisis de diferencias -->
+                <div class="analysis-grid">
+                    <!-- Panel de mayores diferencias -->
+                    <div class="analysis-panel">
+                        <div class="analysis-header">
+                            <h3><i class="fas fa-arrow-up"></i> Highest Differences</h3>
+                            <p>States with largest prediction errors</p>
+                        </div>
+                        
+                        <div class="analysis-content">
+                            <div class="state-list">
+                                {% for state, diff in statistics.top_states_diff.items %}
+                                <div class="state-item high">
+                                    <div class="state-info">
+                                        <span class="state-name">{{ state }}</span>
+                                    </div>
+                                    <div class="state-metrics">
+                                        <span class="state-value">{{ diff|floatformat:2 }}%</span>
+                                        <div class="state-indicator high"></div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de menores diferencias -->
+                    <div class="analysis-panel">
+                        <div class="analysis-header">
+                            <h3><i class="fas fa-arrow-down"></i> Lowest Differences</h3>
+                            <p>States with highest prediction accuracy</p>
+                        </div>
+                        
+                        <div class="analysis-content">
+                            <div class="state-list">
+                                {% for state, diff in statistics.bottom_states_diff.items %}
+                                <div class="state-item low">
+                                    <div class="state-info">
+                                        <span class="state-name">{{ state }}</span>
+                                    </div>
+                                    <div class="state-metrics">
+                                        <span class="state-value">{{ diff|floatformat:2 }}%</span>
+                                        <div class="state-indicator low"></div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Panel de información contextual -->
+                    <div class="insights-panel">
+                        <div class="insights-header">
+                            <h3><i class="fas fa-info-circle"></i> Map Information</h3>
+                        </div>
+                        
+                        <div class="insights-content">
+                            <div class="insight-item">
+                                <div class="insight-icon info">
+                                    <i class="fas fa-map"></i>
+                                </div>
+                                <div class="insight-text">
+                                    <div class="insight-title">Real Prices Map</div>
+                                    <div class="insight-description">Shows actual average housing prices from historical market data</div>
+                                </div>
+                            </div>
+                            
+                            <div class="insight-item">
+                                <div class="insight-icon success">
+                                    <i class="fas fa-brain"></i>
+                                </div>
+                                <div class="insight-text">
+                                    <div class="insight-title">Predicted Prices Map</div>
+                                    <div class="insight-description">AI-generated predictions based on XGBoost machine learning models</div>
+                                </div>
+                            </div>
+                            
+                            <div class="insight-item">
+                                <div class="insight-icon warning">
+                                    <i class="fas fa-mouse-pointer"></i>
+                                </div>
+                                <div class="insight-text">
+                                    <div class="insight-title">Interactive Features</div>
+                                    <div class="insight-description">Hover over states to see detailed pricing information</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de carga -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3>Loading Maps...</h3>
+            <p>Processing geographic data and visualizations</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('map-form');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // Manejador del formulario
+    form.addEventListener('submit', function() {
+        loadingOverlay.style.display = 'flex';
+    });
+    
+    // Switcher de vistas de mapa
+    const mapViewInputs = document.querySelectorAll('input[name="map-view"]');
+    const realMap = document.getElementById('real-map');
+    const predictedMap = document.getElementById('predicted-map');
+    const mapTitleText = document.getElementById('map-title-text');
+    
+    mapViewInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.value === 'real') {
+                realMap.classList.add('active');
+                predictedMap.classList.remove('active');
+                mapTitleText.textContent = 'Real Housing Prices Map';
+            } else {
+                realMap.classList.remove('active');
+                predictedMap.classList.add('active');
+                mapTitleText.textContent = 'Predicted Housing Prices Map';
+            }
+            
+            // Trigger resize for maps
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+            }, 100);
+        });
+    });
+    
+    // Funciones para los botones de acción
+    window.downloadMap = function() {
+        const activeMap = document.querySelector('.map-view.active');
+        if (activeMap) {
+            // Implementar descarga del mapa
+            showNotification('Map download feature coming soon!', 'info');
+        }
+    };
+    
+    window.fullscreenMap = function() {
+        const activeMap = document.querySelector('.map-view.active');
+        if (activeMap && activeMap.requestFullscreen) {
+            activeMap.requestFullscreen();
+        }
+    };
+    
+    // Sistema de notificaciones
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            <span>${message}</span>
+            <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('fade-out');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 4000);
+    }
+    
+    // Asegurar que los mapas se rendericen correctamente
+    setTimeout(() => {
+        window.dispatchEvent(new Event('resize'));
+    }, 500);
+});
+</script>
+{% endblock %}

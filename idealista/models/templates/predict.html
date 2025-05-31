@@ -1,0 +1,498 @@
+{% extends "base.html" %}
+
+{% load static %}
+
+{% block title %}Housing Price Predictions{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/predictions.css' %}?v={% now 'U' %}">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+{% endblock %}
+
+{% block content %}
+<div class="dynamic-background">
+    <div class="container">
+        <!-- Header integrado con navegación breadcrumb -->
+        <div class="header-top">
+            <div class="breadcrumb">
+                <span class="breadcrumb-item"><i class="fas fa-home"></i> Dashboard</span>
+                <span class="breadcrumb-separator">/</span>
+                <span class="breadcrumb-item active">Predictions</span>
+            </div>
+            <h1><i class="fas fa-chart-line"></i> Housing Price Predictions</h1>
+            <p class="subtitle">Advanced machine learning predictions based on economic indicators and market trends</p>
+        </div>
+
+        <!-- Panel de control principal -->
+        <div class="prediction-dashboard">
+            <!-- Barra de parámetros compacta -->
+            <div class="parameters-bar">
+                <form id="prediction-form" method="GET" class="parameters-form">
+                    <div class="parameters-grid">
+                        <div class="parameter-group">
+                            <label for="state_select"><i class="fas fa-map-marker-alt"></i> State</label>
+                            <select id="state_select" name="state" class="parameter-select">
+                                <option value="" disabled {% if not state or state == 'default' %}selected{% endif %}>Select a state</option>
+                                {% for state_item in states_list %}
+                                    <option value="{{state_item}}" {% if state_item == state %}selected{% endif %}>{{ state_item }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="parameter-group">
+                            <label for="start-date"><i class="fas fa-calendar-alt"></i> Start Year</label>
+                            <select id="start-date" name="init_year" class="parameter-select">
+                                <option value="" disabled {% if not init_year %}selected{% endif %}>Start year</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year|stringformat:"s" == init_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="parameter-group">
+                            <label for="end-date"><i class="fas fa-calendar-alt"></i> End Year</label>
+                            <select id="end-date" name="end_year" class="parameter-select">
+                                <option value="" disabled {% if not end_year %}selected{% endif %}>End year</option>
+                                {% for year in year_range %}
+                                <option value="{{ year }}" {% if year|stringformat:"s" == end_year %}selected{% endif %}>{{ year }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="parameter-group">
+                            <label for="house-type"><i class="fas fa-home"></i> Property Type</label>
+                            <select id="house-type" name="house_type" class="parameter-select">
+                                <option value="" disabled {% if not house_type %}selected{% endif %}>Property type</option>
+                                {% for type in types %}
+                                <option value="{{ type }}" {% if type|stringformat:"s" == house_type %}selected{% endif %}>{{ type }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="parameter-group">
+                            <button type="submit" class="predict-button">
+                                <i class="fas fa-play"></i>
+                                <span>Generate Prediction</span>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            {% if plot_div_test %}
+            <!-- Dashboard de resultados -->
+            <div class="results-dashboard">
+                <!-- Métricas destacadas -->
+                <div class="metrics-overview">
+                    <div class="overview-card primary">
+                        <div class="card-icon">
+                            <i class="fas fa-bullseye"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ metrics.RMSE|floatformat:2 }}</div>
+                            <div class="card-label">Root Mean Square Error</div>
+                            <div class="card-detail">Primary accuracy metric</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card success">
+                        <div class="card-icon">
+                            <i class="fas fa-percentage"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ metrics.MAPE|floatformat:1 }}%</div>
+                            <div class="card-label">Mean Absolute Percentage Error</div>
+                            <div class="card-detail">Prediction accuracy</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card info">
+                        <div class="card-icon">
+                            <i class="fas fa-chart-bar"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ metrics.MAE|floatformat:2 }}</div>
+                            <div class="card-label">Mean Absolute Error</div>
+                            <div class="card-detail">Average deviation</div>
+                        </div>
+                    </div>
+                    
+                    <div class="overview-card warning">
+                        <div class="card-icon">
+                            <i class="fas fa-calculator"></i>
+                        </div>
+                        <div class="card-content">
+                            <div class="card-value">{{ metrics.MSE|floatformat:2 }}</div>
+                            <div class="card-label">Mean Square Error</div>
+                            <div class="card-detail">Variance measure</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel principal de visualización -->
+                <div class="visualization-panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <h2 id="chart-title">
+                                <i class="fas fa-chart-line"></i>
+                                <span id="chart-title-text">Price Predictions for {{ state }}</span>
+                            </h2>
+                            <p class="chart-subtitle">{{ init_year }} - {{ end_year }} | {{ house_type }}</p>
+                        </div>
+                        
+                        <div class="panel-controls">
+                            <div class="view-switcher">
+                                <label class="switch-label">
+                                    <input type="radio" name="chart-view" value="predictions" checked>
+                                    <span>Predictions</span>
+                                </label>
+                                <label class="switch-label">
+                                    <input type="radio" name="chart-view" value="importance">
+                                    <span>Feature Importance</span>
+                                </label>
+                            </div>
+                            
+                            <div class="panel-actions">
+                                <button class="action-btn" onclick="downloadChart()" title="Download Chart">
+                                    <i class="fas fa-download"></i>
+                                </button>
+                                <button class="action-btn" onclick="fullscreenChart()" title="Fullscreen">
+                                    <i class="fas fa-expand"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="chart-container">
+                        <div id="predictions-chart" class="chart-view active">
+                            {{ plot_div_test|safe }}
+                        </div>
+                        <div id="importance-chart" class="chart-view">
+                            {{ plot_div_importances|safe }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel de información contextual -->
+                <div class="insights-panel">
+                    <div class="insights-header">
+                        <h3><i class="fas fa-lightbulb"></i> Key Insights</h3>
+                    </div>
+                    
+                    <div class="insights-content">
+                        <div class="insight-item">
+                            <div class="insight-icon success">
+                                <i class="fas fa-arrow-up"></i>
+                            </div>
+                            <div class="insight-text">
+                                <div class="insight-title">Prediction Accuracy</div>
+                                <div class="insight-description">Model shows {{ metrics.MAPE|floatformat:1 }}% average error rate</div>
+                            </div>
+                        </div>
+                        
+                        <div class="insight-item">
+                            <div class="insight-icon info">
+                                <i class="fas fa-calendar"></i>
+                            </div>
+                            <div class="insight-text">
+                                <div class="insight-title">Time Period</div>
+                                <div class="insight-description">Analysis covers {{ init_year|add:"-"|add:end_year|length }} years of market data</div>
+                            </div>
+                        </div>
+                        
+                        <div class="insight-item">
+                            <div class="insight-icon warning">
+                                <i class="fas fa-info-circle"></i>
+                            </div>
+                            <div class="insight-text">
+                                <div class="insight-title">Market Context</div>
+                                <div class="insight-description">Predictions based on economic indicators and historical trends</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <!-- Estado inicial cuando no hay predicciones -->
+            <div class="empty-state">
+                <div class="empty-state-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Ready to Generate Predictions</h3>
+                <p>Select your parameters above and click "Generate Prediction" to see housing price forecasts</p>
+                <div class="empty-state-features">
+                    <div class="feature-item">
+                        <i class="fas fa-brain"></i>
+                        <span>AI-Powered Analysis</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-chart-bar"></i>
+                        <span>Interactive Visualizations</span>
+                    </div>
+                    <div class="feature-item">
+                        <i class="fas fa-target"></i>
+                        <span>Accuracy Metrics</span>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Modal de pantalla completa -->
+    <div class="fullscreen-modal" id="fullscreen-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modal-title">Chart View</h3>
+                <button class="close-modal" onclick="closeFullscreenModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-chart-container">
+                <div id="modal-chart" class="modal-chart-view">
+                    <!-- El contenido del gráfico se moverá aquí temporalmente -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Indicador de carga -->
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h3>Generating Predictions...</h3>
+            <p>Analyzing market data and economic indicators</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('prediction-form');
+    const loadingOverlay = document.getElementById('loading-overlay');
+    
+    // Variables globales para mantener el estado del modal
+    let originalParent = null;
+    let originalChart = null;
+    
+    // Validación y envío del formulario
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        
+        const stateSelect = document.getElementById('state_select');
+        const startDate = document.getElementById('start-date');
+        const endDate = document.getElementById('end-date');
+        const houseType = document.getElementById('house-type');
+
+        // Validaciones
+        if (!stateSelect.value || stateSelect.value === 'default') {
+            showNotification('Please select a state', 'warning');
+            return;
+        }
+        
+        if (!startDate.value || !endDate.value) {
+            showNotification('Please select both start and end years', 'warning');
+            return;
+        }
+        
+        if (parseInt(startDate.value) > parseInt(endDate.value)) {
+            showNotification('Start year must be before or equal to end year', 'error');
+            return;
+        }
+        
+        if (!houseType.value) {
+            showNotification('Please select a property type', 'warning');
+            return;
+        }
+        
+        // Mostrar indicador de carga
+        loadingOverlay.style.display = 'flex';
+        
+        // Construir URL y enviar
+        const baseUrl = "{% url 'models:predict' %}";
+        const params = new URLSearchParams({
+            state: stateSelect.value,
+            init_year: startDate.value,
+            end_year: endDate.value,
+            house_type: houseType.value
+        });
+        
+        form.action = `${baseUrl}?${params.toString()}`;
+        form.submit();
+    });
+    
+    // FUNCIÓN DE REDIMENSIONADO ÚNICA Y UNIFICADA
+    function resizePlots() {
+        if (typeof Plotly !== 'undefined') {
+            const plots = document.querySelectorAll('.js-plotly-plot');
+            plots.forEach(plot => {
+                // Solo redimensionar si el contenedor padre está visible
+                if (plot.offsetParent !== null) {
+                    Plotly.relayout(plot, {
+                        autosize: true
+                    });
+                }
+            });
+        }
+    }
+
+    // Event listeners para redimensionado
+    window.addEventListener('load', function() {
+        setTimeout(resizePlots, 100);
+    });
+
+    window.addEventListener('resize', resizePlots);
+    
+    // TOGGLE DE VISTAS
+    const chartViewInputs = document.querySelectorAll('input[name="chart-view"]');
+    const predictionsChart = document.getElementById('predictions-chart');
+    const importanceChart = document.getElementById('importance-chart');
+    const chartTitleText = document.getElementById('chart-title-text');
+
+    chartViewInputs.forEach(input => {
+        input.addEventListener('change', function() {
+            if (this.value === 'predictions') {
+                importanceChart.classList.remove('active');
+                predictionsChart.classList.add('active');
+                chartTitleText.textContent = 'Price Predictions for {{ state }}';
+            } else {
+                predictionsChart.classList.remove('active');
+                importanceChart.classList.add('active');
+                chartTitleText.textContent = 'Feature Importance Analysis';
+            }
+
+            // Forzar redimensionamiento
+            setTimeout(() => {
+                resizePlots();
+                console.log('Toggle view resized charts');
+            }, 50);
+        });
+    });
+    
+    // Función de descarga
+    window.downloadChart = function() {
+        const activeChart = document.querySelector('.chart-view.active .js-plotly-plot');
+        if (activeChart && typeof Plotly !== 'undefined') {
+            const currentView = document.querySelector('input[name="chart-view"]:checked').value;
+            const filename = currentView === 'predictions' ? 
+                'housing-predictions-chart' : 'feature-importance-chart';
+            
+            Plotly.downloadImage(activeChart, {
+                format: 'png',
+                width: 1200,
+                height: 600,
+                filename: filename
+            });
+        }
+    };
+    
+    // Función de pantalla completa
+    window.fullscreenChart = function() {
+        const activeChart = document.querySelector('.chart-view.active');
+        const modal = document.getElementById('fullscreen-modal');
+        const modalChart = document.getElementById('modal-chart');
+        const modalTitle = document.getElementById('modal-title');
+        
+        if (activeChart && modal) {
+            originalParent = activeChart;
+            originalChart = activeChart.querySelector('.js-plotly-plot');
+            
+            if (originalChart) {
+                const currentView = document.querySelector('input[name="chart-view"]:checked').value;
+                modalTitle.textContent = currentView === 'predictions' ? 
+                    'Price Predictions - Full Screen' : 'Feature Importance - Full Screen';
+                
+                modal.classList.add('active');
+                modalChart.appendChild(originalChart);
+                
+                setTimeout(() => {
+                    resizePlots();
+                }, 200);
+                
+                document.addEventListener('keydown', handleEscapeKey);
+            }
+        }
+    };
+    
+    // Función para cerrar el modal
+    window.closeFullscreenModal = function() {
+        const modal = document.getElementById('fullscreen-modal');
+        const modalChart = document.getElementById('modal-chart');
+        
+        if (originalChart && originalParent) {
+            originalParent.appendChild(originalChart);
+            modalChart.innerHTML = '';
+            modal.classList.add('fade-out');
+            
+            setTimeout(() => {
+                modal.classList.remove('active', 'fade-out');
+                
+                setTimeout(() => {
+                    resizePlots();
+                }, 100);
+                
+                originalParent = null;
+                originalChart = null;
+                document.removeEventListener('keydown', handleEscapeKey);
+            }, 300);
+        }
+    };
+    
+    // Manejar tecla ESC
+    function handleEscapeKey(event) {
+        if (event.key === 'Escape') {
+            closeFullscreenModal();
+        }
+    }
+    
+    // Cerrar modal al hacer clic fuera
+    document.getElementById('fullscreen-modal').addEventListener('click', function(e) {
+        if (e.target === this) {
+            closeFullscreenModal();
+        }
+    });
+    
+    // Sistema de notificaciones
+    function showNotification(message, type = 'info') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.innerHTML = `
+            <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+            <span>${message}</span>
+            <button onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.classList.add('fade-out');
+                setTimeout(() => notification.remove(), 300);
+            }
+        }, 4000);
+    }
+    
+    // SIMPLIFICAR AL MÁXIMO - Solo scroll inteligente para TODOS los selects
+    const allSelects = document.querySelectorAll('#state_select, #start-date, #end-date, #house-type');
+    
+    allSelects.forEach(select => {
+        select.addEventListener('focus', function() {
+            const rect = this.getBoundingClientRect();
+            const spaceBelow = window.innerHeight - rect.bottom;
+            
+            // Si no hay suficiente espacio debajo, hacer scroll
+            if (spaceBelow < 250) {
+                setTimeout(() => {
+                    this.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'center'
+                    });
+                }, 50);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

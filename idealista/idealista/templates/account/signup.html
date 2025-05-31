@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}Sign Up | Housing Price Predictions{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{% static 'css/login.css' %}?v={% now 'U' %}">
+{% endblock %}
+
+{% block content %}
+<div class="dynamic-background">
+    <div class="container">
+        <div class="login-card signup-card">
+            <div class="login-header">
+                <h1>Create Account</h1>
+                <div class="login-subtitle">Join us to explore housing price predictions and market analysis</div>
+            </div>
+
+            <form method="post" action="{% url 'account_signup' %}" class="login-form">
+            {% csrf_token %}
+
+            {% if form.errors %}
+            <div class="alert alert-error">
+                {% for field, errors in form.errors.items %}
+                <p>{{ field }}: {{ errors|join:", " }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <div class="form-group {% if form.email.errors %}has-error{% endif %}">
+                <label for="id_email">Email</label>
+                <input type="email" name="email" id="id_email" required {% if form.email.value %}value="{{ form.email.value }}" {% endif %}>
+                {% if form.email.errors %}
+                <span class="field-error">{{ form.email.errors|join:", " }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group {% if form.username.errors %}has-error{% endif %}">
+                <label for="id_username">Username</label>
+                <input type="text" name="username" id="id_username" required {% if form.username.value %}value="{{ form.username.value }}" {% endif %}>
+                {% if form.username.errors %}
+                <span class="field-error">{{ form.username.errors|join:", " }}</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group {% if form.password1.errors %}has-error{% endif %}">
+                <label for="id_password1">Password</label>
+                <div class="password-field">
+                    <input type="password" name="password1" id="id_password1" required>
+                    <i class="fas fa-eye-slash toggle-password" data-target="id_password1"></i>
+                </div>
+                {% if form.password1.errors %}
+                <span class="field-error">{{ form.password1.errors|join:", " }}</span>
+                {% else %}
+                <span class="help-text">Your password must be at least 8 characters and can't be too common.</span>
+                {% endif %}
+            </div>
+
+            <div class="form-group {% if form.password2.errors %}has-error{% endif %}">
+                <label for="id_password2">Confirm Password</label>
+                <div class="password-field">
+                    <input type="password" name="password2" id="id_password2" required>
+                    <i class="fas fa-eye-slash toggle-password" data-target="id_password2"></i>
+                </div>
+                {% if form.password2.errors %}
+                <span class="field-error">{{ form.password2.errors|join:", " }}</span>
+                {% endif %}
+            </div>
+
+            {% if redirect_field_value %}
+            <input type="hidden" name="{{ redirect_field_name }}" value="{{ redirect_field_value }}">
+            {% endif %}
+            
+            <!-- Añadir campo de next para redirección -->
+            <input type="hidden" name="next" value="{% url 'home' %}">
+            
+            <button type="submit" class="btn login-btn signup-btn">
+                Create Account <i class="fas fa-user-plus"></i>
+            </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    // Toggle password visibility
+    document.querySelectorAll('.toggle-password').forEach(function (toggle) {
+        toggle.addEventListener('click', function () {
+            const targetId = this.getAttribute('data-target');
+            const passwordField = document.getElementById(targetId);
+            const type = passwordField.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordField.setAttribute('type', type);
+            this.classList.toggle('fa-eye');
+            this.classList.toggle('fa-eye-slash');
+        });
+    });
+</script>
+{% endblock %}
