@@ -74,8 +74,8 @@
 
 ### **1. Clonar el Repositorio**
 ```bash
-git clone https://github.com/tu-usuario/tfg-daniel-fernandez-idealista.git
-cd tfg-daniel-fernandez-idealista
+git clone https://github.com/DaniFdezCab/Idealista.git
+cd Idealista
 ```
 
 ### **2. Crear Entorno Virtual**
